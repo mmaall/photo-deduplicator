@@ -1,2 +1,2 @@
-# photo-deduplicator-
+# photo-deduplicator
 Pet project to deduplicate my photos. 
