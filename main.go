@@ -9,17 +9,33 @@ import (
 	//"errors"
 	log "github.com/sirupsen/logrus"
 	"path/filepath"
+	"sync"
+)
+
+var logger = log.New()
+
+const (
+	WORKER_THREADS = 4
 )
 
 func main() {
-	logger := log.WithFields(log.Fields{"agent": "main"})
+
+	logFile, err := os.OpenFile("logger.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err == nil {
+		logger.Out = logFile
+	} else {
+		logger.Info("Failed to log to file, using default stderr")
+	}
+
+	logger.WithFields(log.Fields{"agent": "main"})
 	logger.Info("Program starting")
 
 	// Initializations
 	photoDirectory := "/home/michael/Pictures"
-	var photoMap map[string][]string
-	photoMap = make(map[string][]string)
-	// Get a list of photos
+	// photoDirectory := "photos/"
+
+	// Initialize photomap
+	var photoMap *SafeMap = NewSafeMap()
 
 	photoList, err := GetPhotos(photoDirectory)
 
@@ -28,65 +44,62 @@ func main() {
 		panic(err)
 	}
 
+	photoChannel := make(chan string)
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(WORKER_THREADS)
+
+	// Spawn some go routines
+	for i := 0; i < WORKER_THREADS; i++ {
+		go ProcessPhoto(i, photoChannel, &waitGroup, photoMap)
+	}
+
 	// Iterate through all the photos
 	logger.Info("Printing Files")
 	for _, photo := range photoList {
-		//logger.Info(photo)
+		photoChannel <- photo
+	}
+	close(photoChannel)
+	logger.Info("Photo channel closed")
 
-		file, err := os.Open(photo)
+	waitGroup.Wait()
+}
+
+// Get a photo of of the channel, check the photo map, write if possible
+func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitGroup, photoMap *SafeMap) {
+	logger.Info("Starting Go Routine ", routineId)
+	for fileName := range inputChannel {
+		//logger.Info("Routine ", routineId, ": Processing ", fileName)
+		// Open file
+		file, err := os.Open(fileName)
 		if err != nil {
-			logger.Fatal(err)
+			logger.Error("Issue opening ", fileName)
+			logger.Error(err)
 		}
 
-		// Hash the file
+		// Hash file
 		h := sha256.New()
 		if _, err := io.Copy(h, file); err != nil {
-			logger.Fatal(err)
+			logger.Error("Issue copying file ", fileName)
+			logger.Error(err)
 		}
 		// Turn the hash into a string
 		sha := base64.URLEncoding.EncodeToString(h.Sum(nil))
-
+		//logger.Info("Routine ", routineId, ": ", sha)
 		// Close the file, not needed anymore
 		file.Close()
 
-		// Check what is there
-		photoList := photoMap[sha]
+		// Check if hash exists
+		collidedFile := photoMap.WriteUnique(sha, fileName)
 
-		// Empty list, include new one
-		if len(photoList) == 0 {
-			// Add photo to list
-			photoList := append(photoList, photo)
-			photoMap[sha] = photoList
-		} else {
-			// Collision in map, fully verify they are the same
-
-			logger.Info("Collision found with ", photo)
-
-			duplicateFound := false
-			var duplicateFile string
-
-			// Iterate through photos and see if we have a match
-			// Search for duplicates
-			for _, foundPhoto := range photoList {
-				logger.Info("\t", foundPhoto)
-				duplicateFound, _ = PhotoCompare(photo, foundPhoto)
-				if duplicateFound {
-					duplicateFile = foundPhoto
-				}
-
-			}
-
-			// No collision found, add hash
-			if !duplicateFound {
-				photoList := append(photoList, photo)
-				photoMap[sha] = photoList
-			} else {
-				logger.Info("Duplicate confirmed: ", photo, " == ", duplicateFile)
-			}
+		if collidedFile != "" {
+			// collission
+			logger.Info("Routine ", routineId, " Collision: ", fileName, " == ", collidedFile)
 		}
 
 	}
-
+	logger.Info("Worker ", routineId, " done")
+	waitGroup.Done()
+	return
 }
 
 func GetPhotos(directory string) ([]string, error) {
@@ -119,5 +132,46 @@ func PhotoCompare(photo1, photo2 string) (bool, error) {
 	_, file2 := filepath.Split(photo2)
 
 	return file1 == file2, nil
+}
 
+// Thread safe map structure
+type SafeMap struct {
+	_map    map[string]string
+	mapLock *sync.RWMutex
+}
+
+func NewSafeMap() *SafeMap {
+	return &SafeMap{
+		_map:    make(map[string]string),
+		mapLock: &sync.RWMutex{},
+	}
+}
+
+func (sm *SafeMap) Read(key string) string {
+	sm.mapLock.RLock()
+	defer sm.mapLock.RUnlock()
+	return sm._map[key]
+
+}
+
+func (sm *SafeMap) Write(key, value string) {
+	sm.mapLock.Lock()
+	defer sm.mapLock.Unlock()
+	sm._map[key] = value
+}
+
+// Write only succeeds if the key has never been seen before
+// Returns collided value in case of collision. Otherwise empty string returned
+func (sm *SafeMap) WriteUnique(key, value string) string {
+	sm.mapLock.Lock()
+	defer sm.mapLock.Unlock()
+	existingValue := sm._map[key]
+	// If default value, we're good to write
+	if existingValue == "" {
+		sm._map[key] = value
+		return ""
+	} else {
+		// Found something, write fails
+		return sm._map[key]
+	}
 }
