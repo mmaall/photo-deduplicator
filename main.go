@@ -9,6 +9,7 @@ import (
 	//"errors"
 	log "github.com/sirupsen/logrus"
 	"path/filepath"
+	"photo-deduplicator/helpers"
 	"sync"
 )
 
@@ -31,11 +32,11 @@ func main() {
 	logger.Info("Program starting")
 
 	// Initializations
-	photoDirectory := "/home/michael/Pictures"
-	// photoDirectory := "photos/"
+	//photoDirectory := "/home/michael/Pictures"
+	photoDirectory := "photos/"
 
 	// Initialize photomap
-	var photoMap *SafeMap = NewSafeMap()
+	var photoMap *helpers.SafeMap = helpers.NewSafeMap()
 
 	photoList, err := GetPhotos(photoDirectory)
 
@@ -65,7 +66,7 @@ func main() {
 }
 
 // Get a photo of of the channel, check the photo map, write if possible
-func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitGroup, photoMap *SafeMap) {
+func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitGroup, photoMap *helpers.SafeMap) {
 	logger.Info("Starting Go Routine ", routineId)
 	for fileName := range inputChannel {
 		//logger.Info("Routine ", routineId, ": Processing ", fileName)
@@ -132,46 +133,4 @@ func PhotoCompare(photo1, photo2 string) (bool, error) {
 	_, file2 := filepath.Split(photo2)
 
 	return file1 == file2, nil
-}
-
-// Thread safe map structure
-type SafeMap struct {
-	_map    map[string]string
-	mapLock *sync.RWMutex
-}
-
-func NewSafeMap() *SafeMap {
-	return &SafeMap{
-		_map:    make(map[string]string),
-		mapLock: &sync.RWMutex{},
-	}
-}
-
-func (sm *SafeMap) Read(key string) string {
-	sm.mapLock.RLock()
-	defer sm.mapLock.RUnlock()
-	return sm._map[key]
-
-}
-
-func (sm *SafeMap) Write(key, value string) {
-	sm.mapLock.Lock()
-	defer sm.mapLock.Unlock()
-	sm._map[key] = value
-}
-
-// Write only succeeds if the key has never been seen before
-// Returns collided value in case of collision. Otherwise empty string returned
-func (sm *SafeMap) WriteUnique(key, value string) string {
-	sm.mapLock.Lock()
-	defer sm.mapLock.Unlock()
-	existingValue := sm._map[key]
-	// If default value, we're good to write
-	if existingValue == "" {
-		sm._map[key] = value
-		return ""
-	} else {
-		// Found something, write fails
-		return sm._map[key]
-	}
 }
