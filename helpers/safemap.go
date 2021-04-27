@@ -10,6 +10,7 @@ type SafeMap struct {
 	mapLock *sync.RWMutex
 }
 
+// Create a new SafeMap
 func NewSafeMap() *SafeMap {
 	return &SafeMap{
 		_map:    make(map[string]string),
@@ -17,6 +18,7 @@ func NewSafeMap() *SafeMap {
 	}
 }
 
+// Read from the map
 func (sm *SafeMap) Read(key string) string {
 	sm.mapLock.RLock()
 	defer sm.mapLock.RUnlock()
@@ -24,6 +26,7 @@ func (sm *SafeMap) Read(key string) string {
 
 }
 
+// Write to the map
 func (sm *SafeMap) Write(key, value string) {
 	sm.mapLock.Lock()
 	defer sm.mapLock.Unlock()
