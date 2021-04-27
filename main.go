@@ -69,7 +69,6 @@ func main() {
 func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitGroup, photoMap *helpers.SafeMap) {
 	logger.Info("Starting Go Routine ", routineId)
 	for fileName := range inputChannel {
-		//logger.Info("Routine ", routineId, ": Processing ", fileName)
 		// Open file
 		file, err := os.Open(fileName)
 		if err != nil {
@@ -85,7 +84,6 @@ func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitG
 		}
 		// Turn the hash into a string
 		sha := base64.URLEncoding.EncodeToString(h.Sum(nil))
-		//logger.Info("Routine ", routineId, ": ", sha)
 		// Close the file, not needed anymore
 		file.Close()
 
@@ -123,14 +121,4 @@ func GetPhotos(directory string) ([]string, error) {
 	})
 
 	return photos, err
-}
-
-// Compare two photos
-// TODO: Compare the file themselves, not their pahts
-func PhotoCompare(photo1, photo2 string) (bool, error) {
-	// Split the paths
-	_, file1 := filepath.Split(photo1)
-	_, file2 := filepath.Split(photo2)
-
-	return file1 == file2, nil
 }
