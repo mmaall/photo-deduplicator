@@ -4,12 +4,10 @@ import (
 	//"fmt"
 	"crypto/sha256"
 	"encoding/base64"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
-	//"errors"
-	log "github.com/sirupsen/logrus"
 	"path/filepath"
-	"photo-deduplicator/helpers"
 	"sync"
 )
 
@@ -18,6 +16,11 @@ var logger = log.New()
 const (
 	WORKER_THREADS = 4
 )
+
+// Holds key value pairs
+type pair struct {
+	key, val string
+}
 
 func main() {
 
@@ -35,9 +38,6 @@ func main() {
 	//photoDirectory := "/home/michael/Pictures"
 	photoDirectory := "photos/"
 
-	// Initialize photomap
-	var photoMap *helpers.SafeMap = helpers.NewSafeMap()
-
 	photoList, err := GetPhotos(photoDirectory)
 
 	if err != nil {
@@ -45,14 +45,26 @@ func main() {
 		panic(err)
 	}
 
+	// Channel file names are pushed onto this channel
 	photoChannel := make(chan string)
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(WORKER_THREADS)
+	var photoWaitGroup sync.WaitGroup
+	photoWaitGroup.Add(WORKER_THREADS)
 
-	// Spawn some go routines
+	// Hashed files and correpsonding file name pushed onto this channel
+	keyValueChannel := make(chan pair)
+	var hashingWaitGroup sync.WaitGroup
+	hashingWaitGroup.Add(1)
+
+	// Spawn some go routines to do the hashing
 	for i := 0; i < WORKER_THREADS; i++ {
-		go ProcessPhoto(i, photoChannel, &waitGroup, photoMap)
+		go ProcessPhoto(i, photoChannel, keyValueChannel, &photoWaitGroup)
 	}
+
+	// Create Map
+	photoMap := make(map[string]string)
+
+	// Spawn the go routine to store the hashes
+	go AddToMap(keyValueChannel, &hashingWaitGroup, &photoMap)
 
 	// Iterate through all the photos
 	logger.Info("Printing Files")
@@ -62,11 +74,17 @@ func main() {
 	close(photoChannel)
 	logger.Info("Photo channel closed")
 
-	waitGroup.Wait()
+	// Wait for all the photos to be processed
+	photoWaitGroup.Wait()
+	// Close the channel
+	close(keyValueChannel)
+	// Wait for all the hashing
+	hashingWaitGroup.Wait()
+
 }
 
 // Get a photo of of the channel, check the photo map, write if possible
-func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitGroup, photoMap *helpers.SafeMap) {
+func ProcessPhoto(routineId int, inputChannel chan string, outputChannel chan pair, photoWaitGroup *sync.WaitGroup) {
 	logger.Info("Starting Go Routine ", routineId)
 	for fileName := range inputChannel {
 		// Open file
@@ -88,17 +106,33 @@ func ProcessPhoto(routineId int, inputChannel chan string, waitGroup *sync.WaitG
 		file.Close()
 
 		// Check if hash exists
-		collidedFile := photoMap.WriteUnique(sha, fileName)
 
-		if collidedFile != "" {
-			// collission
-			logger.Info("Routine ", routineId, " Collision: ", fileName, " == ", collidedFile)
-		}
+		var keyValue pair = pair{sha, fileName}
+
+		outputChannel <- keyValue
 
 	}
 	logger.Info("Worker ", routineId, " done")
-	waitGroup.Done()
+	photoWaitGroup.Done()
 	return
+}
+
+// Read pairs off of a channel, add them to the map if they don't already exist
+// Identify when a collision has occured
+func AddToMap(inputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap *map[string]string) {
+	for keyValuePair := range inputChannel {
+
+		collidedFile := (*photoMap)[keyValuePair.key]
+
+		if collidedFile == "" {
+			// Write to map
+			(*photoMap)[keyValuePair.key] = keyValuePair.val
+		} else {
+			logger.Info("Collision: ", keyValuePair.val, " == ", collidedFile)
+		}
+	}
+
+	hashingWaitGroup.Done()
 }
 
 func GetPhotos(directory string) ([]string, error) {
