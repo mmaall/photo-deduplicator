@@ -4,18 +4,16 @@ import (
 	//"fmt"
 	"crypto/sha256"
 	"encoding/base64"
+	"github.com/pborman/getopt/v2"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
+	// "time"
 )
 
 var logger = log.New()
-
-const (
-	WORKER_THREADS = 4
-)
 
 // Holds key value pairs
 type pair struct {
@@ -24,21 +22,45 @@ type pair struct {
 
 func main() {
 
-	logFile, err := os.OpenFile("logger.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// Default values
+	var (
+		help                bool
+		hashingRoutineCount = 4
+		directory           = "photos/"
+		logFileName         = "logfile.log"
+	)
+
+	// Take in arguments
+	getopt.FlagLong(&help, "help", 'h', "Help")
+	getopt.FlagLong(&hashingRoutineCount, "hashingRoutineCount", 'c', "Number of routines hashing the files.")
+	getopt.FlagLong(&directory, "directory", 'd', "Directory to deduplicate.")
+	getopt.FlagLong(&logFileName, "logFile", 'L', "Log file")
+
+	// Parse arguments
+	getopt.Parse()
+
+	// Print help and exit if help exists
+	if help {
+		getopt.Usage()
+		os.Exit(0)
+	}
+
+	// Initialize logging
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
 		logger.Out = logFile
 	} else {
 		logger.Info("Failed to log to file, using default stderr")
 	}
-
 	logger.WithFields(log.Fields{"agent": "main"})
-	logger.Info("Program starting")
 
-	// Initializations
-	//photoDirectory := "/home/michael/Pictures"
-	photoDirectory := "photos/"
+	// List out the arguments
+	logger.Info("**Application Configuration**")
+	logger.Info("Hashing Routines: ", hashingRoutineCount)
+	logger.Info("Directory: ", directory)
+	logger.Info("Log file: ", logFileName)
 
-	photoList, err := GetPhotos(photoDirectory)
+	photoList, err := GetPhotos(directory)
 
 	if err != nil {
 		logger.Fatal("Error getting photos list")
@@ -47,27 +69,29 @@ func main() {
 
 	// Channel file names are pushed onto this channel
 	photoChannel := make(chan string)
+	// Wait group to verify all photos have been collected
 	var photoWaitGroup sync.WaitGroup
-	photoWaitGroup.Add(WORKER_THREADS)
+	photoWaitGroup.Add(hashingRoutineCount)
 
 	// Hashed files and correpsonding file name pushed onto this channel
 	keyValueChannel := make(chan pair)
+	// Wait group to verify all photos have been hashed
 	var hashingWaitGroup sync.WaitGroup
 	hashingWaitGroup.Add(1)
 
 	// Spawn some go routines to do the hashing
-	for i := 0; i < WORKER_THREADS; i++ {
+	for i := 0; i < hashingRoutineCount; i++ {
 		go ProcessPhoto(i, photoChannel, keyValueChannel, &photoWaitGroup)
 	}
 
-	// Create Map
+	// Create holding file hashes
 	photoMap := make(map[string]string)
 
 	// Spawn the go routine to store the hashes
 	go AddToMap(keyValueChannel, &hashingWaitGroup, &photoMap)
 
 	// Iterate through all the photos
-	logger.Info("Printing Files")
+	logger.Info("Iterate through photos")
 	for _, photo := range photoList {
 		photoChannel <- photo
 	}
