@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"github.com/pborman/getopt/v2"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,12 +13,12 @@ import (
 	// "time"
 )
 
-var logger = log.New()
-
 // Holds key value pairs
 type pair struct {
 	key, val string
 }
+
+var log = logrus.New()
 
 func main() {
 
@@ -27,7 +27,7 @@ func main() {
 		help                bool
 		hashingRoutineCount = 4
 		directory           = "photos/"
-		logFileName         = "logfile.log"
+		logFileName         = ""
 	)
 
 	// Take in arguments
@@ -46,24 +46,28 @@ func main() {
 	}
 
 	// Initialize logging
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err == nil {
-		logger.Out = logFile
-	} else {
-		logger.Info("Failed to log to file, using default stderr")
+
+	// See if a log file was provided
+	if logFileName != "" {
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err == nil {
+			log.Out = logFile
+		} else {
+			log.Info("Failed to log to file, using default stderr")
+		}
 	}
-	logger.WithFields(log.Fields{"agent": "main"})
+	log.WithFields(logrus.Fields{"agent": "main"})
 
 	// List out the arguments
-	logger.Info("**Application Configuration**")
-	logger.Info("Hashing Routines: ", hashingRoutineCount)
-	logger.Info("Directory: ", directory)
-	logger.Info("Log file: ", logFileName)
+	log.Info("**Application Configuration**")
+	log.Info("Hashing Routines: ", hashingRoutineCount)
+	log.Info("Directory: ", directory)
+	log.Info("Log file: ", logFileName)
 
 	photoList, err := GetPhotos(directory)
 
 	if err != nil {
-		logger.Fatal("Error getting photos list")
+		log.Fatal("Error getting photos list")
 		panic(err)
 	}
 
@@ -91,12 +95,12 @@ func main() {
 	go AddToMap(keyValueChannel, &hashingWaitGroup, &photoMap)
 
 	// Iterate through all the photos
-	logger.Info("Iterate through photos")
+	log.Info("Iterate through photos")
 	for _, photo := range photoList {
 		photoChannel <- photo
 	}
 	close(photoChannel)
-	logger.Info("Photo channel closed")
+	log.Info("Photo channel closed")
 
 	// Wait for all the photos to be processed
 	photoWaitGroup.Wait()
@@ -109,20 +113,20 @@ func main() {
 
 // Get a photo of of the channel, check the photo map, write if possible
 func ProcessPhoto(routineId int, inputChannel chan string, outputChannel chan pair, photoWaitGroup *sync.WaitGroup) {
-	logger.Info("Starting Go Routine ", routineId)
+	log.Info("Starting Go Routine ", routineId)
 	for fileName := range inputChannel {
 		// Open file
 		file, err := os.Open(fileName)
 		if err != nil {
-			logger.Error("Issue opening ", fileName)
-			logger.Error(err)
+			log.Error("Issue opening ", fileName)
+			log.Error(err)
 		}
 
 		// Hash file
 		h := sha256.New()
 		if _, err := io.Copy(h, file); err != nil {
-			logger.Error("Issue copying file ", fileName)
-			logger.Error(err)
+			log.Error("Issue copying file ", fileName)
+			log.Error(err)
 		}
 		// Turn the hash into a string
 		sha := base64.URLEncoding.EncodeToString(h.Sum(nil))
@@ -136,7 +140,7 @@ func ProcessPhoto(routineId int, inputChannel chan string, outputChannel chan pa
 		outputChannel <- keyValue
 
 	}
-	logger.Info("Worker ", routineId, " done")
+	log.Info("Worker ", routineId, " done")
 	photoWaitGroup.Done()
 	return
 }
@@ -152,7 +156,7 @@ func AddToMap(inputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap
 			// Write to map
 			(*photoMap)[keyValuePair.key] = keyValuePair.val
 		} else {
-			logger.Info("Collision: ", keyValuePair.val, " == ", collidedFile)
+			log.Info("Collision: ", keyValuePair.val, " == ", collidedFile)
 		}
 	}
 
