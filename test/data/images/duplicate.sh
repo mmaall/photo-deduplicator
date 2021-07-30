@@ -4,7 +4,7 @@ numDuplicates=15
 
 
 # Get the list of files 
-files=($(ls -d *.jpg))
+files=($(ls -d *.JPG))
 
 # Create the duplicates 
 for ((i = 0; i < $numDuplicates; i++));  do
