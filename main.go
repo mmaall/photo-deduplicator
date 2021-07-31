@@ -10,6 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	// "time"
 )
 
@@ -64,12 +67,23 @@ func main() {
 	log.Info("Directory: ", directory)
 	log.Info("Log file: ", logFileName)
 
+	// Setup AWS stuff
+
+	awsSession, err := session.NewSession()
+
+	if err != nil {
+		log.Fatal("AWS Setup Failed (", err, ")")
+		panic(err)
+	}
+
 	photoList, err := GetPhotos(directory)
 
 	if err != nil {
 		log.Fatal("Error getting photos list")
 		panic(err)
 	}
+
+	log.Info("Photos to process: ", len(photoList))
 
 	// Channel file names are pushed onto this channel
 	photoChannel := make(chan string)
@@ -83,6 +97,12 @@ func main() {
 	var hashingWaitGroup sync.WaitGroup
 	hashingWaitGroup.Add(1)
 
+	// Unique key pair channel
+	dedupedKeyValueChannel := make(chan pair)
+	// Wait group to verify all unique photos have been uploaded
+	var uploadWaitGroup sync.WaitGroup
+	uploadWaitGroup.Add(1)
+
 	// Spawn some go routines to do the hashing
 	for i := 0; i < hashingRoutineCount; i++ {
 		go ProcessPhoto(i, photoChannel, keyValueChannel, &photoWaitGroup)
@@ -92,7 +112,10 @@ func main() {
 	photoMap := make(map[string]string)
 
 	// Spawn the go routine to store the hashes
-	go AddToMap(keyValueChannel, &hashingWaitGroup, &photoMap)
+	go AddToMap(keyValueChannel, dedupedKeyValueChannel, &hashingWaitGroup, &photoMap)
+
+	// Spawn the go routine to upload the photos
+	go UploadPhotos(dedupedKeyValueChannel, &uploadWaitGroup, awsSession)
 
 	// Iterate through all the photos
 	log.Info("Iterate through photos")
@@ -108,6 +131,9 @@ func main() {
 	close(keyValueChannel)
 	// Wait for all the hashing
 	hashingWaitGroup.Wait()
+
+	// Wait for the upload to occur
+	uploadWaitGroup.Wait()
 
 }
 
@@ -146,8 +172,9 @@ func ProcessPhoto(routineId int, inputChannel chan string, outputChannel chan pa
 }
 
 // Read pairs off of a channel, add them to the map if they don't already exist
+// Emits to outputChannel all the unique pairs.
 // Identify when a collision has occured
-func AddToMap(inputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap *map[string]string) {
+func AddToMap(inputChannel chan pair, outputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap *map[string]string) {
 	for keyValuePair := range inputChannel {
 
 		collidedFile := (*photoMap)[keyValuePair.key]
@@ -155,12 +182,36 @@ func AddToMap(inputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap
 		if collidedFile == "" {
 			// Write to map
 			(*photoMap)[keyValuePair.key] = keyValuePair.val
+
+			outputChannel <- keyValuePair
 		} else {
 			log.Info("Collision: ", keyValuePair.val, " == ", collidedFile)
 		}
 	}
 
+	close(outputChannel)
 	hashingWaitGroup.Done()
+}
+
+// Read pairs pairs of photos and hashes and checks if they exist in DynamoDB
+// Emits to outputChannel all the unique pairs.
+// Identify when a collision has occured
+func UploadPhotos(inputChannel chan pair, waitGroup *sync.WaitGroup, awsSession *session.Session) {
+
+	readsToDynamo := 0
+	for keyValuePair := range inputChannel {
+
+		// Throwaway line
+		_ = keyValuePair
+
+		readsToDynamo++
+	}
+
+	log.Info("Unique Photos: ", readsToDynamo)
+
+	// Signal that we are finished
+	waitGroup.Done()
+
 }
 
 func GetPhotos(directory string) ([]string, error) {
