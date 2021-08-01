@@ -4,7 +4,6 @@ Pet project to deduplicate my photos.
 ## Usage
 ```bash
  $ ./photo-deduplicator --help
-
 Usage: photo-deduplicator [-h] [-c value] [-d value] [-L value] [parameters ...]
     -c, --hashingRoutineCount=value
             Number of routines hashing the files. [4]
