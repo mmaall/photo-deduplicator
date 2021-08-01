@@ -31,7 +31,7 @@ func NewAwsPhotoDeduplicatorStack(scope constructs.Construct, id string, props *
 
 	// Create a dynamodb table to store key values
 
-	keyName := "hash-key"
+	keyName := "photoHash"
 	tableName := "PhotoHashTable"
 	awsdynamodb.NewTable(stack, &tableName, &awsdynamodb.TableProps{
 		PartitionKey: &awsdynamodb.Attribute{
