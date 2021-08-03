@@ -34,7 +34,7 @@ func TestAddToMap(t *testing.T) {
 		})
 	}
 
-	fmt.Print("Created %d", pairCount, "pairs")
+	fmt.Print("Created ", pairCount, " pairs")
 
 	// TODO: Finish up this test
 
