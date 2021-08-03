@@ -5,7 +5,7 @@ phases:
     commands:
       - echo Entered the install phase...
       - yum update -y
-      - yum install golang
+      - yum install golang -y
     finally:
       - echo Command phase finished  
   pre_build:
