@@ -32,7 +32,7 @@ func New(directory string, hashingRoutines int) *PhotoDeduplicator {
 }
 
 // Run the deduplication
-func (deduplicator *PhotoDeduplicator) Deduplicate() {
+func (deduplicator *PhotoDeduplicator) Run() {
 
 	photoList, err := getPhotos(deduplicator.directory)
 
