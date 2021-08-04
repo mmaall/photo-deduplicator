@@ -1,0 +1,31 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo Entered the install phase...
+      - yum update -y
+      - yum install golang -y
+    finally:
+      - echo Command phase finished  
+  pre_build:
+    commands:
+      - echo Entered the pre_build phase...
+    finally:
+      - echo Pre-build phase finished  
+  build:
+    commands:
+      - echo "Entered the build phase..."
+      - echo "Build started on `date`"
+      - echo "Build main"
+      - go build
+      - echo "Build deduplication agent"
+      - go build cmd/dedupe-agent/main.go
+      - echo "Run deduplicator package tests"
+      - go test photo-deduplicator/internal/deduplicator -v
+    finally:
+      - echo Build phase finished 
+  post_build:
+    commands:
+      - echo Entered the post_build phase...
+      - echo Build completed on `date`
