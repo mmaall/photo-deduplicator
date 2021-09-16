@@ -1,14 +1,11 @@
 #!/bin/bash
-
-
 # This will run a command and collect metrics of it using iostat. Metrics and 
 # output are captured and placed into log files. There are a few arguments
 # documented below. All hold default values which are probably not very 
 # helpful in your situation 
 # 
-
 # Example: 
-#./runBenchmark -c "echo hello" \
+#./benchmark -c "echo hello" \
 #    -l command-output.log \
 #    -o performance.json
 
@@ -49,11 +46,16 @@ iostat -o JSON -c -t 1 > ${LOG_FILE} &
 
 IOSTAT_PID=$!
 
+echo "Starting iostat ($IOSTAT_PID)"
+
+echo "Running command: $COMMAND"
 # Start the binary command
-$COMMAND &> ${OUTPUT_FILE}
+${COMMAND} &> ${OUTPUT_FILE}
 
 # End iostat 
 # Send SIGINT to end process gracefully
 kill -s SIGINT ${IOSTAT_PID}
 
-
+echo "Exiting"
+echo "Performance log: $LOG_FILE"
+echo "Command output: $OUTPUT_FILE"
