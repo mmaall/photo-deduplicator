@@ -34,7 +34,9 @@ while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
     ;;
   -l | --log )
     shift; LOG_FILE=$1
-    ;; -c | --command ) shift; COMMAND=$1
+    ;; 
+  -c | --command ) 
+    shift; COMMAND=$1
     ;;
 esac; shift; done
 if [[ "$1" == '--' ]]; then shift; fi
