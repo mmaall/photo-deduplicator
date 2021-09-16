@@ -3,11 +3,12 @@ package deduplicator
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type PhotoDeduplicator struct {
@@ -77,7 +78,7 @@ func (deduplicator *PhotoDeduplicator) Run() {
 	hashingWaitGroup.Wait()
 }
 
-// Get a photo of of the channel, check the photo map, write if possible
+// Receives a photo hashes it, and places it on a channel for further actions
 func processPhoto(routineId int, inputChannel chan string, outputChannel chan pair, photoWaitGroup *sync.WaitGroup) {
 	log.Info("Starting Go Routine ", routineId)
 	for fileName := range inputChannel {
@@ -89,7 +90,7 @@ func processPhoto(routineId int, inputChannel chan string, outputChannel chan pa
 		outputChannel <- keyValue
 
 	}
-	log.Info("Worker ", routineId, " done")
+	log.Info("Hashing worker ", routineId, " done")
 	photoWaitGroup.Done()
 	return
 }

@@ -2,10 +2,11 @@ package main
 
 import (
 	//"fmt"
-	"github.com/pborman/getopt/v2"
-	"github.com/sirupsen/logrus"
 	"os"
 	"photo-deduplicator/internal/deduplicator"
+
+	"github.com/pborman/getopt/v2"
+	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.New()
@@ -17,6 +18,7 @@ func main() {
 	// Maybe an extract parameters function that either uses parameter store during ci/cd
 	var (
 		help                bool
+		verbose             bool
 		hashingRoutineCount = 4
 		directory           = "photos/"
 		logFileName         = ""
@@ -26,6 +28,7 @@ func main() {
 
 	// Take in arguments
 	getopt.FlagLong(&help, "help", 'h', "Help")
+	getopt.FlagLong(&verbose, "verbose", 'v', "Verbose printing")
 	getopt.FlagLong(&hashingRoutineCount, "hashingRoutineCount", 'c', "Number of routines hashing the files.")
 	getopt.FlagLong(&directory, "directory", 'd', "Directory to deduplicate.")
 	getopt.FlagLong(&logFileName, "logFile", 'L', "Log file")
@@ -53,6 +56,13 @@ func main() {
 		}
 	}
 	log.WithFields(logrus.Fields{"agent": "main"})
+
+	// Set to verbose log level if turned on
+	if verbose {
+		log.SetLevel(logrus.DebugLevel)
+		log.Debug("Debug level set")
+
+	}
 
 	// List out the arguments
 	log.Info("**Application Configuration**")
