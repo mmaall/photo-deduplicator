@@ -8,23 +8,65 @@ Parameters:
   VpcCIDR:
     Description: Please enter the IP range (CIDR notation) for this VPC
     Type: String
-    Default: 10.192.0.0/16
+    Default: 10.0.0.0/16
 
   PublicSubnet1CIDR:
     Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
     Type: String
-    Default: 10.192.10.0/24
+    Default: 10.0.1.0/24
 
   PrivateSubnet1CIDR:
     Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
     Type: String
-    Default: 10.192.20.0/24
+    Default: 10.0.2.0/24
 
 Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       AccessControl: Private
+
+  # This is the role to access S3
+  S3AccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+
+  # Necessary policy 
+  S3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyName: !Join ["", [!Ref EnvironmentName, "S3AccessPolicy"]]
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: "s3:*"
+            Resource: 
+              - !Join ["", ["arn:aws:s3:::", !Ref S3Bucket]]
+              - !Join ["", ["arn:aws:s3:::", !Ref S3Bucket, "/*"]]
+      Roles: 
+        - !Ref "S3AccessRole"
+
+  # Instance profile so Ec2 can assume it. 
+  S3AccessRoleInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "S3AccessRole"
+
+  # Necessary VPC things 
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -59,7 +101,6 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
 
-
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -70,7 +111,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
-
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -162,3 +202,7 @@ Outputs:
   NoIngressSecurityGroup:
     Description: Security group with no ingress rule
     Value: !Ref NoIngressSecurityGroup
+
+  S3AccessRole:
+    Description: The role to gain access to necessary S3 bucket
+    Value: !Ref S3AccessRole
