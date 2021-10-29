@@ -13,9 +13,6 @@
 # -o, --output
 #   The output CSV being conveted to
 
-
-
-
 # Default values 
 INPUT_FILE="perf-log.json"
 CSV_OUTPUT="perf-log.csv"
