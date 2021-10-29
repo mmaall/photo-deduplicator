@@ -23,10 +23,11 @@ phases:
     finally:
       - echo Build phase finished 
 
-  artifacts:
-    files:
-      - 'dedupe-agent'
   post_build:
     commands:
       - echo Entered the post_build phase...
       - echo Build completed on `date`
+
+artifacts:
+  files:
+    - 'dedupe-agent'
