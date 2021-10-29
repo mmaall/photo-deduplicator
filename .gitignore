@@ -17,6 +17,7 @@
 
 # Personal files
 photo-deduplicator.sublime*
+*.jpg
 
 # Random things
 *creds*

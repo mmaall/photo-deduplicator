@@ -17,14 +17,15 @@ phases:
     commands:
       - echo "Entered the build phase..."
       - echo "Build started on `date`"
-      - echo "Build main"
-      - go build
-      - echo "Build deduplication agent"
+      - echo "Build deduplicator"
+      - make dedupe-agent
       - go build cmd/dedupe-agent/main.go
-      - echo "Run deduplicator package tests"
-      - go test photo-deduplicator/internal/deduplicator -v
     finally:
       - echo Build phase finished 
+
+  artifacts:
+    files:
+      - 'dedupe-agent'
   post_build:
     commands:
       - echo Entered the post_build phase...
