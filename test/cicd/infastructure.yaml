@@ -149,7 +149,7 @@ Resources:
         - AssociatePublicIpAddress: "true"
           DeviceIndex: "0"
           GroupSet: 
-            - !Ref NoIngressSecurityGroup
+            - sg-07f55f9ecc996b827
           SubnetId: !Ref PublicSubnet1
       InstanceType: t3.medium 
       Tags:
