@@ -18,7 +18,7 @@ phases:
       - echo "Entered the build phase..."
       - echo "Build started on `date`"
       - echo "Build deduplicator"
-      - make dedupe-agent
+      - make dedupe-agent-arm
       - go build cmd/dedupe-agent/main.go
     finally:
       - echo Build phase finished 

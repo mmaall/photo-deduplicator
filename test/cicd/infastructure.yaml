@@ -143,7 +143,7 @@ Resources:
   DedupeInstance: 
     Type: AWS::EC2::Instance
     Properties: 
-      ImageId: "ami-083654bd07b5da81d"
+      ImageId: "ami-04fe9398b2a27a600"
       KeyName: "photo-deduplicator"
       NetworkInterfaces: 
         - AssociatePublicIpAddress: "true"
