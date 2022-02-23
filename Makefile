@@ -10,6 +10,12 @@ dedupe-agent-arm:
 dedupe-agent-clean:
 	rm -f dedupe-agent
 
+http-server:
+	GOARCH=amd64 GOOS="linux" go build -o http-server -a cmd/http-server/main.go
+
+http-server-clean:
+	rm -f http-server
+
 performance-test:
 	GOARCH="arm64" GOOS="linux" && go build -o dedupe-agent-amd64 -a cmd/dedupe-agent/main.go
 	GOARCH="amd64" GOOS="linux" && go build -o dedupe-agent-aarch -a cmd/dedupe-agent/main.go
@@ -19,6 +25,6 @@ performance-test:
 performance-test-clean:
 	rm -f test/performance/dedupe-agent-*
 
-clean: dedupe-agent-clean performance-test-clean
+clean: dedupe-agent-clean http-server-clean performance-test-clean
 	rm -f photo-deduplicator
 
