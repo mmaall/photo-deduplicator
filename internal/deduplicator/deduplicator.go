@@ -17,6 +17,11 @@ type PhotoDeduplicator struct {
 	hashingRoutines int
 }
 
+type DedupeFileMetadata struct {
+	Path          string
+	DuplicatePath string
+}
+
 // Holds key value pairs
 type pair struct {
 	key, val string
@@ -33,7 +38,9 @@ func New(directory string, hashingRoutines int) *PhotoDeduplicator {
 }
 
 // Run the deduplication
-func (deduplicator *PhotoDeduplicator) Run() {
+// a channel is passed to the function which will serve details about the photos being processed
+// waitgroup will notify when all photos have been processed
+func (deduplicator *PhotoDeduplicator) Serve(dedupedPhotoChannel chan<- DedupeFileMetadata, dedupedPhotoWaitGroup *sync.WaitGroup) {
 
 	photoList, err := getPhotos(deduplicator.directory)
 
@@ -54,13 +61,17 @@ func (deduplicator *PhotoDeduplicator) Run() {
 	var hashingWaitGroup sync.WaitGroup
 	hashingWaitGroup.Add(1)
 
+	// Add a waiter to the photo WaitGroup being provided so we can signal that all photos have been
+	// processed
+	dedupedPhotoWaitGroup.Add(1)
+
 	// Spawn some go routines to do the hashing
 	for i := 0; i < deduplicator.hashingRoutines; i++ {
 		go processPhoto(i, photoChannel, keyValueChannel, &photoWaitGroup)
 	}
 
 	// Spawn the go routine to store the hashes
-	go addToMap(keyValueChannel, &hashingWaitGroup, &deduplicator.photoMap)
+	go checkCollision(keyValueChannel, dedupedPhotoChannel, &hashingWaitGroup, &deduplicator.photoMap)
 
 	// Iterate through all the photos
 	log.Info("Iterate through photos")
@@ -76,6 +87,11 @@ func (deduplicator *PhotoDeduplicator) Run() {
 	close(keyValueChannel)
 	// Wait for all the hashing
 	hashingWaitGroup.Wait()
+
+	// Close the output channel
+	close(dedupedPhotoChannel)
+	// Close the final waitgroup to signal all photos have been processed
+	dedupedPhotoWaitGroup.Done()
 }
 
 // Receives a photo hashes it, and places it on a channel for further actions
@@ -97,8 +113,13 @@ func processPhoto(routineId int, inputChannel chan string, outputChannel chan pa
 
 // Read pairs off of a channel, add them to the map if they don't already exist
 // Identify when a collision has occured
-func addToMap(inputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap *map[string]string) {
+func checkCollision(inputChannel chan pair, outputChannel chan<- DedupeFileMetadata, hashingWaitGroup *sync.WaitGroup, photoMap *map[string]string) {
 	for keyValuePair := range inputChannel {
+
+		fileMetadata := DedupeFileMetadata{
+			Path:          keyValuePair.val,
+			DuplicatePath: "",
+		}
 
 		collidedFile := (*photoMap)[keyValuePair.key]
 
@@ -107,10 +128,16 @@ func addToMap(inputChannel chan pair, hashingWaitGroup *sync.WaitGroup, photoMap
 			(*photoMap)[keyValuePair.key] = keyValuePair.val
 		} else {
 			log.Info("Collision: ", keyValuePair.val, " == ", collidedFile)
+
+			// Mark as duplicate
+			fileMetadata.DuplicatePath = collidedFile
 		}
+
+		outputChannel <- fileMetadata
 	}
 
 	hashingWaitGroup.Done()
+	return
 }
 
 func getPhotos(directory string) ([]string, error) {

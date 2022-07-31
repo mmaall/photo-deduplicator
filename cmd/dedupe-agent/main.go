@@ -1,9 +1,10 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"os"
 	"photo-deduplicator/internal/deduplicator"
+	"sync"
 
 	"github.com/pborman/getopt/v2"
 	"github.com/sirupsen/logrus"
@@ -22,8 +23,6 @@ func main() {
 		hashingRoutineCount = 4
 		directory           = "photos/"
 		logFileName         = ""
-		dynamoTableName     = "PhotoHashTable"
-		region              = "us-east-1"
 	)
 
 	// Take in arguments
@@ -32,8 +31,6 @@ func main() {
 	getopt.FlagLong(&hashingRoutineCount, "hashingRoutineCount", 'c', "Number of routines hashing the files.")
 	getopt.FlagLong(&directory, "directory", 'd', "Directory to deduplicate.")
 	getopt.FlagLong(&logFileName, "logFile", 'L', "Log file")
-	getopt.FlagLong(&dynamoTableName, "dynamoTable", 't', "DynamoDB Table")
-	getopt.FlagLong(&region, "region", 'r', "AWS region")
 
 	// Parse arguments
 	getopt.Parse()
@@ -71,7 +68,22 @@ func main() {
 	log.Info("Log file: ", logFileName)
 
 	deduper := deduplicator.New(directory, hashingRoutineCount)
+	photoChannel := make(chan deduplicator.DedupeFileMetadata, 15)
+	var photoWaitGroup sync.WaitGroup
 
-	deduper.Run()
+	deduper.Serve(photoChannel, &photoWaitGroup)
+
+	totalDuplicates := 0
+
+	for photoMetadata := range photoChannel {
+
+		if photoMetadata.DuplicatePath != "" {
+			totalDuplicates += 1
+			fmt.Printf("%s is a duplicate of %s\n", photoMetadata.Path, photoMetadata.DuplicatePath)
+		}
+
+	}
+
+	photoWaitGroup.Wait()
 
 }
