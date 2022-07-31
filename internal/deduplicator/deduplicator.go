@@ -15,6 +15,7 @@ type PhotoDeduplicator struct {
 	directory       string
 	photoMap        map[string]string
 	hashingRoutines int
+	bufferSize      int
 }
 
 type DedupeFileMetadata struct {
@@ -34,6 +35,7 @@ func New(directory string, hashingRoutines int) *PhotoDeduplicator {
 		directory:       directory,
 		photoMap:        make(map[string]string),
 		hashingRoutines: hashingRoutines,
+		bufferSize:      10,
 	}
 }
 
@@ -42,6 +44,18 @@ func New(directory string, hashingRoutines int) *PhotoDeduplicator {
 // waitgroup will notify when all photos have been processed
 func (deduplicator *PhotoDeduplicator) Serve(dedupedPhotoChannel chan<- DedupeFileMetadata, dedupedPhotoWaitGroup *sync.WaitGroup) {
 
+	// Spawn go routine to start dedupliaction
+	go deduplicator.serveHandler(dedupedPhotoChannel, dedupedPhotoWaitGroup)
+}
+
+// Set the size of the internal buffers for the deduplicator
+// Unsure if this should be exposed but will be conveninet for perf testing
+func (deduplicator *PhotoDeduplicator) SetBufferSize(bufferSize int) {
+	deduplicator.bufferSize = bufferSize
+}
+
+// Go routine which is going to run the deduplicator in a non blocking way.
+func (deduplicator *PhotoDeduplicator) serveHandler(dedupedPhotoChannel chan<- DedupeFileMetadata, dedupedPhotoWaitGroup *sync.WaitGroup) {
 	photoList, err := getPhotos(deduplicator.directory)
 
 	if err != nil {
@@ -50,13 +64,13 @@ func (deduplicator *PhotoDeduplicator) Serve(dedupedPhotoChannel chan<- DedupeFi
 	}
 
 	// Channel file names are pushed onto this channel
-	photoChannel := make(chan string)
+	photoChannel := make(chan string, deduplicator.bufferSize)
 	// Wait group to verify all photos have been collected
 	var photoWaitGroup sync.WaitGroup
 	photoWaitGroup.Add(deduplicator.hashingRoutines)
 
 	// Hashed files and correpsonding file name pushed onto this channel
-	keyValueChannel := make(chan pair)
+	keyValueChannel := make(chan pair, deduplicator.bufferSize)
 	// Wait group to verify all photos have been hashed
 	var hashingWaitGroup sync.WaitGroup
 	hashingWaitGroup.Add(1)

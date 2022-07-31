@@ -68,7 +68,8 @@ func main() {
 	log.Info("Log file: ", logFileName)
 
 	deduper := deduplicator.New(directory, hashingRoutineCount)
-	photoChannel := make(chan deduplicator.DedupeFileMetadata, 15)
+	deduper.SetBufferSize(50)
+	photoChannel := make(chan deduplicator.DedupeFileMetadata, 100)
 	var photoWaitGroup sync.WaitGroup
 
 	deduper.Serve(photoChannel, &photoWaitGroup)
